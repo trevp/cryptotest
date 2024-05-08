@@ -4,3 +4,4 @@ import «Cryptotest».Basics
 import «Cryptotest».CryptoAlgs
 import «Cryptotest».Definitions
 import «Cryptotest».Proofs
+import «Cryptotest».RRtoLR
