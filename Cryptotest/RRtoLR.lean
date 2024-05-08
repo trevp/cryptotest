@@ -2,8 +2,8 @@
 structure SymEnc (KeyType: Type) (MessageType: Type) (CiphertextType: Type) where
   init: Unit → KeyType
   enc: KeyType → MessageType → CiphertextType
-  dec: KeyType → CiphertextType -> Option MessageType
-  random: Unit -> CiphertextType
+  dec: KeyType → CiphertextType → Option MessageType
+  random: Unit → CiphertextType
 
 
 def oracle_real (s: SymEnc KeyType MessageType CiphertextType)
