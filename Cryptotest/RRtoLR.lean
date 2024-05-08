@@ -15,7 +15,7 @@ def oracle_random (s: SymEnc KeyType MessageType CiphertextType)
   s.random ()
 
 def is_ror_ind (s: SymEnc KeyType MessageType CipherTextType) :=
-  ∀ (k: KeyType) (m: MessageType), game_real s k m = game_random s k m
+  ∀ (k: KeyType) (m: MessageType), oracle_real s k m = oracle_random s k m
 
 
 def oracle_left (s: SymEnc KeyType MessageType CiphertextType)
@@ -27,18 +27,18 @@ def oracle_right (s: SymEnc KeyType MessageType CiphertextType)
   s.enc k mr
 
 def is_lr_ind (s: SymEnc KeyType MessageType CipherTextType) :=
-  ∀ (k: KeyType) (ml: MessageType) (mr: MessageType), game_lr_left s k ml mr = game_lr_right s k ml mr
+  ∀ (k: KeyType) (ml: MessageType) (mr: MessageType), oracle_left s k ml mr = oracle_right s k ml mr
 
 
 theorem ror_implies_lr (s: SymEnc KeyType MessageType CipherTextType) :
     is_ror_ind s → is_lr_ind s := by
-  -- simp_all [game_real, game_random, is_ror_ind, game_lr_left, game_lr_right, is_lr_ind, SymEnc]
+  -- simp_all [oracle_real, oracle_random, is_ror_ind, oracle_left, oracle_right, is_lr_ind, SymEnc]
   -- above works, but do it very explicitly for demonstration:
   intro h
   unfold is_lr_ind
-  unfold game_lr_left game_lr_right
+  unfold oracle_left oracle_right
   unfold is_ror_ind at h
-  unfold game_real game_random at h
+  unfold oracle_real oracle_random at h
   intro k ml mr
   have hl := h k ml
   have hr := h k mr
