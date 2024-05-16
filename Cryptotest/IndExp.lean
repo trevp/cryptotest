@@ -25,18 +25,6 @@ end GlobalState
 
 namespace IndExp
 
-@[simp]
-def is_nonrepeating_random_rec (i: IndExp) (gs: GlobalState) : Prop :=
-  match i with
-  | any       => False
-  | num _     => False
-  | rng       => True
-  | rng_pub   => True
-  | prf n i   => match gs.prfs[n]? with
-    | some _    => i.is_nonrepeating_random_rec gs
-    | none      => False
-  | xor i1 i2  => i1.is_nonrepeating_random_rec gs ∨ i2.is_nonrepeating_random_rec gs
-
 @[simp] -- Indistinguishable from random?
 def is_ind_rand_rec (i: IndExp) (gs: GlobalState) : Prop :=
   match i with
@@ -45,9 +33,11 @@ def is_ind_rand_rec (i: IndExp) (gs: GlobalState) : Prop :=
   | rng       => True
   | rng_pub   => False
   | prf n i   => match gs.prfs[n]? with
-    | some _    => i.is_nonrepeating_random_rec gs
     | none      => False
-  | xor i1 i2  => i1.is_ind_rand_rec gs ∨ 
+    | some _    => match i with
+      | rng_pub   => True
+      | _         => i.is_ind_rand_rec gs
+  | xor i1 i2  => i1.is_ind_rand_rec gs ∨
                   i2.is_ind_rand_rec gs
 
 @[simp]
@@ -64,15 +54,10 @@ def is_ind_self (i: IndExp) (gs: GlobalState) : Prop :=
   | rng_pub   => True
   | _         => i.is_ind_rand gs
 
-
 end IndExp
-
-
-
--- CRYPTO ALGS
-
 open IndExp
 
+-- CRYPTO ALGS
 -- Simple examples: Stateless one-time encryption:
 
 def enc_otp : IndExp :=
@@ -87,8 +72,7 @@ def enc_double_otp : IndExp :=
 theorem enc_double_otp_is_ind_rand :
   enc_double_otp.is_ind_rand initial_state := by simp_all
 
-
--- Encryption algorithms for CPA security:
+-- CPA security:
 -- The function returns a GlobalState and an encryption function
 -- The encryption function returns (IndExp, GlobalState)
 
@@ -112,8 +96,8 @@ def enc_prf_random_nonce : EncryptionAlgorithmCPA := fun _ =>
   let enc := fun gs' => (xor any (prf k rng_pub), gs')
   (enc, gs)
 
-theorem enc_prf_random_nonce_is_one_time_ind : 
+theorem enc_prf_random_nonce_is_one_time_ind :
   is_one_time_ind (enc_prf_random_nonce) := by simp_all
 
-theorem enc_prf_random_nonce_is_cpa : 
+theorem enc_prf_random_nonce_is_cpa :
   is_cpa (enc_prf_random_nonce) := by simp_all
