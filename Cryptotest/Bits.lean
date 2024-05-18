@@ -89,7 +89,7 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
     | q+1 =>
         let (result, state) := loop q
         let (ctxt, new_state) := enc_func state
-        (ctxt = rand ∧ result, new_state)
+        (result ∧ ctxt = rand, new_state)
   (loop q).1
 
 -- ...when attacker queries any number of messages (caveat above)
@@ -136,14 +136,14 @@ theorem enc_prf_random_is_ind_cpa :
   split
   rename_i _ _ _ h; unfold enc_prf_random at h; cases h
   induction q with
-  | zero => simp [is_ind_cpa_q.loop]
-  | succ n ih =>
+  | zero =>
+    unfold is_ind_cpa_q.loop; simp
+  | succ _ ih =>
     unfold is_ind_cpa_q.loop
     simp only [ih]
-    apply And.intro
-    · rw [enc_prf_random_loop_doesnt_modify_state]
-      exact enc_prf_random_always_outputs_rand
-    · trivial
+    apply And.intro; trivial
+    rw [enc_prf_random_loop_doesnt_modify_state]
+    exact enc_prf_random_always_outputs_rand
 
 -- WORK IN PROGRESS:
 -- Another simple encryption scheme: (n, prf(n) xor msg)
