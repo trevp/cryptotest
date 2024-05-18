@@ -1,7 +1,18 @@
 import Mathlib
 open Finset
 
--- Fixed-length sequence of bits of cryptographic length, e.g. 128 or 256 bits
+/-
+Bits is a fixed-length sequence of bits of cryptographic length, e.g. 128 or 256 bits.
+
+Every occurrence of Bits.rand or Bits.rand_pub in an expression represents a fresh
+random value.  To reuse a random value it must be "captured" in some other object,
+e.g. a Prf.
+
+Bits.any could be anything, so is used for adversary-chosen plaintexts, or the output
+of calculations when we can't reason about them more precisely.  Bits.rand or rand_pub
+take priority over Bits.any in expressions, so "xor rand any = rand", because "any" has
+a fixed value before "rand" makes a random choice, so "any" and "rand" can't collide.
+-/
 inductive Bits where
   | any           : Bits     -- any value
   | rand          : Bits     -- indistinguishable from random
@@ -12,13 +23,15 @@ namespace Bits
 
 @[simp] def xor (b1: Bits) (b2: Bits) : Bits :=
   match b1, b2 with
-  | rand, _ => rand
-  | _, rand => rand
-  | _, _ => any
+  | rand, _ => rand -- XOR of fresh random with anything is random
+  | _, rand => rand -- " "
+  | _, _ => any     -- Otherwise we can't reason about the output, so return "any"
 end Bits
 
 open Bits
 
+-- If constructed with a key that is Bits.rand, the PRF object "captures" a
+-- particular value for the key and reuses it.
 structure PrfRandInputs where
   key : Bits
 
@@ -31,15 +44,15 @@ namespace PrfRandInputs
   match p.key with
   | rand =>
     match input with
-    | rand | rand_pub => (rand, p)
+    | rand | rand_pub => (rand, p) -- PRF with rand key and nonrepeating output = rand
     | _ => (any, p)
   | _ => (any, p)
 
 end PrfRandInputs
 
 structure PrfNumInputs where
-  key : Bits
-  used_nums : Finset Nat
+  key : Bits -- If key is Bits.rand then the PRF "captures" the key and reuses it
+  used_nums : Finset Nat -- Records all inputs to detect reuse
 
 namespace PrfNumInputs
 
@@ -59,11 +72,11 @@ namespace PrfNumInputs
   | _ => (any, p)
 end PrfNumInputs
 
--- Simple proofs: Encryption with One-Time Pad
--- Adversary implicitly provides Bits.any and sees Bits.rand,
--- so we don't need to model the adversary or security game.
--- Proofs are handled automatically by Lean's simplifier tactic.
--- Try replacing simp with simp? to see the definitions used in proof.
+/- Simple proofs: Encryption with One-Time Pad
+Adversary implicitly provides Bits.any and sees Bits.rand, so we don't
+need to model the adversary or security game. Proofs are handled
+automatically by Lean's simplifier tactic. Try replacing simp with
+simp? to see the definitions used in proof. -/
 @[simp] def enc_otp         : Bits := xor rand any
 @[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
 
@@ -108,13 +121,11 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
 @[simp] def enc_prf_random : EncryptionSchemeCPA PrfRandInputs :=
   (enc_prf_random_init, enc_prf_random_func)
 
--- Some lemmas used in the following proof
-lemma enc_prf_random_doesnt_modify_state :
-    ∀ (state: PrfRandInputs), (enc_prf_random_func state).2 = state := by
-  intro state
-  simp [enc_prf_random_func]
-  split <;> rfl
+-- Proof of one-time security
+theorem enc_prf_random_is_ind_one_time :
+  is_ind_one_time enc_prf_random := by simp
 
+-- Some lemmas used in the following proof of IND-CPA security
 lemma enc_prf_random_loop_outputs_init_state :
     ∀ q,  (is_ind_cpa_q.loop enc_prf_random_init enc_prf_random_func q).2 =
           (enc_prf_random_init) := by
@@ -125,9 +136,6 @@ lemma enc_prf_random_loop_outputs_init_state :
 
 lemma enc_prf_random_with_init_state_outputs_rand :
   (enc_prf_random_func enc_prf_random_init).1 = rand := by simp
-
-theorem enc_prf_random_is_ind_one_time :
-  is_ind_one_time (enc_prf_random) := by simp
 
 -- Main proof of this section.  A simple proof by induction.
 -- IF is_ind_cpa for n queries (induction hypothesis ih),
@@ -150,23 +158,26 @@ theorem enc_prf_random_is_ind_cpa :
     exact enc_prf_random_with_init_state_outputs_rand
 
 -- WORK IN PROGRESS:
--- Another simple encryption scheme: (n, prf(n) xor msg)
--- Adversary allowed to choose nonces n, but can't reuse them ("nonce-respecting")
--- This follows EasyCrypt's IND-NRCPA$ tutorial:
--- https://fdupress.gitlab.io/easycrypt-web/docs/simple-tutorial/security
+/-Another simple encryption scheme: (n, prf(n) xor msg)
+  Adversary allowed to choose nonces n, but can't reuse them ("nonce-respecting")
+  This follows EasyCrypt's IND-NRCPA$ tutorial:
+  https://fdupress.gitlab.io/easycrypt-web/docs/simple-tutorial/security
+-/
 
 -- The encryption function takes an additional input (Nat)
 def EncryptionSchemeNRCPA (EncStateType: Type) : Type :=
   EncStateType × (Nat → EncStateType → (Bits × EncStateType))
 
--- We have to explicitly model the adversary now, unlike previous examples where
--- Bits.any stood in for the adversary's choices.
---
--- An adversary is a pair (initial state, adversary function).
--- The adversary function maps an input state to a nonce and new state.
--- As before, the adversary's plaintext inputs are modeled as Bits.any and the
--- game will check that ciphertexts are Bits.rand, so we don't need to explicitly
--- model the adversary's view of plaintexts and ciphertexts, only their choice of nonces.
+/-
+We have to explicitly model the adversary now, unlike previous examples where
+Bits.any stood in for all adversary choices.
+
+An adversary is a pair (initial state, adversary function). The adversary
+function maps an input state to a nonce and new state. As before, the
+adversary's plaintext inputs are modeled as Bits.any and the game will check
+that ciphertexts are Bits.rand, so we don't need to explicitly model the
+adversary's view of plaintexts and ciphertexts, only their choice of nonces.
+-/
 def AdversaryNRCPA (AdvStateType: Type) : Type :=
   AdvStateType × (AdvStateType → (Nat × AdvStateType))
 
