@@ -62,28 +62,19 @@ end PrfNumInputs
 -- Simple proofs: Encryption with One-Time Pad
 -- Adversary implicitly provides Bits.any and sees Bits.rand,
 -- so we don't need to explicitly model the adversary or security game.
-def enc_otp : Bits :=
-  xor rand any
+@[simp] def enc_otp         : Bits := xor rand any
+@[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
 
-theorem enc_otp_is_ind_rand :
-    enc_otp = rand := by
-  simp [enc_otp]
-
-def enc_double_otp : Bits :=
-  xor rand (xor rand any)
-
-theorem enc_double_otp_is_ind_rand :
-    enc_double_otp = rand := by
-  simp [enc_double_otp]
+theorem enc_otp_is_ind_rand         : enc_otp = rand        := by simp
+theorem enc_double_otp_is_ind_rand  : enc_double_otp = rand := by simp
 
 -- More complex proofs: CPA security
-
 -- An encryption scheme is a pair (initial state, encryption function).
 -- The encryption function maps an input state to an (output Bits, new state)
 def EncryptionSchemeCPA (EncStateType: Type) : Type :=
   EncStateType × (EncStateType → (Bits × EncStateType))
 
--- security definition when attacker queries one message
+-- Security definition when attacker queries one message
 @[simp] def is_ind_one_time (enc_scheme: EncryptionSchemeCPA EncStateType) : Prop :=
   let (initial_state, enc_func) := enc_scheme
   let (ctxt, _state) := enc_func initial_state
@@ -93,38 +84,68 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
 -- we're not tracking bounds, so this definition is only valid for small q
 @[simp] def is_ind_cpa_q (enc_scheme: EncryptionSchemeCPA EncStateType) (q: Nat): Prop :=
   let (initial_state, enc_func) := enc_scheme
-  let rec loop : Nat → EncStateType → Prop
-    | 0, _state   => True
-    | q+1, state =>
-      let (ctxt, new_state) := enc_func state
-      ctxt = rand ∧ loop q new_state
-  (loop q initial_state)
+  let rec loop : Nat → Prop × EncStateType
+    | 0   => (True, initial_state)
+    | q+1 =>
+        let (result, state) := loop q
+        let (ctxt, new_state) := enc_func state
+        (ctxt = rand ∧ result, new_state)
+  (loop q).1
 
 -- ...when attacker queries any number of messages (caveat above)
 @[simp] def is_ind_cpa (enc_scheme: EncryptionSchemeCPA EncStateType): Prop :=
   ∀ (q: Nat), is_ind_cpa_q enc_scheme q
 
--- A simple encryption scheme: (r=rand, prf(k,r) xor msg)
+-- A simple encryption scheme: r=rand, prf(k,r) xor msg
+@[simp] def enc_prf_random_init := PrfRandInputs.new rand
 
-def enc_prf_random : EncryptionSchemeCPA PrfRandInputs :=
-  (PrfRandInputs.new rand,
-  fun prf =>
-    let (prf_out, prf_next) := prf.prf rand_pub
-    (xor any prf_out, prf_next))
+@[simp] def enc_prf_random_func (prf: PrfRandInputs) : Bits × PrfRandInputs :=
+  let (prf_out, prf_next) := prf.prf rand_pub
+  (xor any prf_out, prf_next)
+
+@[simp] def enc_prf_random : EncryptionSchemeCPA PrfRandInputs :=
+  (enc_prf_random_init, enc_prf_random_func)
+
+-- Some lemmas used in the following proofs
+@[simp] lemma enc_prf_random_doesnt_modify_state :
+    ∀ (state: PrfRandInputs), (enc_prf_random_func state).2 = state := by
+  intro state
+  simp [enc_prf_random_func]
+  split <;> rfl
+
+@[simp] lemma enc_prf_random_loop_doesnt_modify_state :
+    ∀ q,  (is_ind_cpa_q.loop enc_prf_random_init enc_prf_random_func q).2 =
+          (enc_prf_random_init) := by
+  intro q
+  induction q with
+  | zero => simp [is_ind_cpa_q.loop]
+  | succ n ih => simp_all [is_ind_cpa_q.loop]
+
+@[simp] lemma enc_prf_random_always_outputs_rand :
+  (enc_prf_random_func enc_prf_random_init).1 = rand := by
+  simp
 
 theorem enc_prf_random_is_ind_one_time :
-    is_ind_one_time (enc_prf_random) := by
-  simp [enc_prf_random]
+    is_ind_one_time (enc_prf_random) := by simp
 
 theorem enc_prf_random_is_ind_cpa :
     is_ind_cpa (enc_prf_random) := by
   unfold is_ind_cpa
   intro q
   unfold is_ind_cpa_q
+  split
+  rename_i _ _ _ h; unfold enc_prf_random at h; cases h
   induction q with
-  | zero => simp_all [is_ind_cpa_q.loop, enc_prf_random]
-  | succ => simp_all [is_ind_cpa_q.loop, enc_prf_random]
+  | zero => simp [is_ind_cpa_q.loop]
+  | succ n ih =>
+    unfold is_ind_cpa_q.loop
+    simp only [ih]
+    apply And.intro
+    · rw [enc_prf_random_loop_doesnt_modify_state]
+      exact enc_prf_random_always_outputs_rand
+    · trivial
 
+-- WORK IN PROGRESS:
 -- Another simple encryption scheme: (n, prf(n) xor msg)
 -- Adversary allowed to choose nonces n, but can't reuse them ("nonce-respecting")
 -- This follows EasyCrypt's IND-NRCPA$ tutorial:
@@ -167,6 +188,7 @@ def AdversaryNRCPA (AdvStateType: Type) : Type :=
     | 0, _enc_state, _adv_state => True
     | q+1, enc_state, adv_state =>
       let (n, new_adv_state) := adv_func adv_state
+      -- TODO: Enforce nonces are non-repeating
       let (ctxt, new_enc_state) := enc_func n enc_state
       ctxt = rand ∧ loop q new_enc_state new_adv_state
   (loop q initial_enc_state initial_adv_state)
