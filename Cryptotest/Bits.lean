@@ -61,7 +61,9 @@ end PrfNumInputs
 
 -- Simple proofs: Encryption with One-Time Pad
 -- Adversary implicitly provides Bits.any and sees Bits.rand,
--- so we don't need to explicitly model the adversary or security game.
+-- so we don't need to model the adversary or security game.
+-- Proofs are handled automatically by Lean's simplifier tactic.
+-- Try replacing simp with simp? to see the definitions used in proof.
 @[simp] def enc_otp         : Bits := xor rand any
 @[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
 
@@ -86,8 +88,8 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
   let (initial_state, enc_func) := enc_scheme
   let rec loop : Nat → Prop × EncStateType
     | 0   => (True, initial_state)
-    | q+1 =>
-        let (result, state) := loop q
+    | n+1 =>
+        let (result, state) := loop n
         let (ctxt, new_state) := enc_func state
         (result ∧ ctxt = rand, new_state)
   (loop q).1
@@ -106,28 +108,30 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
 @[simp] def enc_prf_random : EncryptionSchemeCPA PrfRandInputs :=
   (enc_prf_random_init, enc_prf_random_func)
 
--- Some lemmas used in the following proofs
-@[simp] lemma enc_prf_random_doesnt_modify_state :
+-- Some lemmas used in the following proof
+lemma enc_prf_random_doesnt_modify_state :
     ∀ (state: PrfRandInputs), (enc_prf_random_func state).2 = state := by
   intro state
   simp [enc_prf_random_func]
   split <;> rfl
 
-@[simp] lemma enc_prf_random_loop_doesnt_modify_state :
+lemma enc_prf_random_loop_outputs_init_state :
     ∀ q,  (is_ind_cpa_q.loop enc_prf_random_init enc_prf_random_func q).2 =
           (enc_prf_random_init) := by
   intro q
   induction q with
   | zero => simp [is_ind_cpa_q.loop]
-  | succ n ih => simp_all [is_ind_cpa_q.loop]
+  | succ => simp_all [is_ind_cpa_q.loop]
 
-@[simp] lemma enc_prf_random_always_outputs_rand :
-  (enc_prf_random_func enc_prf_random_init).1 = rand := by
-  simp
+lemma enc_prf_random_with_init_state_outputs_rand :
+  (enc_prf_random_func enc_prf_random_init).1 = rand := by simp
 
 theorem enc_prf_random_is_ind_one_time :
-    is_ind_one_time (enc_prf_random) := by simp
+  is_ind_one_time (enc_prf_random) := by simp
 
+-- Main proof of this section.  A simple proof by induction.
+-- IF is_ind_cpa for n queries (induction hypothesis ih),
+-- THEN is_ind_cpa for n+1 queries because of the lemmas
 theorem enc_prf_random_is_ind_cpa :
     is_ind_cpa (enc_prf_random) := by
   unfold is_ind_cpa
@@ -142,8 +146,8 @@ theorem enc_prf_random_is_ind_cpa :
     unfold is_ind_cpa_q.loop
     simp only [ih]
     apply And.intro; trivial
-    rw [enc_prf_random_loop_doesnt_modify_state]
-    exact enc_prf_random_always_outputs_rand
+    rw [enc_prf_random_loop_outputs_init_state]
+    exact enc_prf_random_with_init_state_outputs_rand
 
 -- WORK IN PROGRESS:
 -- Another simple encryption scheme: (n, prf(n) xor msg)
