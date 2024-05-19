@@ -79,9 +79,10 @@ automatically by Lean's simplifier tactic. Try replacing simp with
 simp? to see the definitions used in proof.
 
 Note that we prove a strong notion of indistinguishability
-(indistinguishability of ciphertexts from random bits).  This implies
-"left-or-right" IND-CPA, or encryption of a "real-or-random" message,
-though we don't bother formalizing that.
+(indistinguishability of ciphertexts from random bits).  Assuming that
+the ciphertext space is the Bits space, then this equals CPA$
+(indistinguishability of real or random ciphertexts) which implies
+"left-or-right" IND-CPA, though we don't bother formalizing that.
 -/
 @[simp] def enc_otp         : Bits := xor rand any
 @[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
