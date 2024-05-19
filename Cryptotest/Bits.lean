@@ -241,6 +241,9 @@ def AdversaryNRCPA (AdvStateType: Type) : Type :=
   (enc_prf_nr_init, enc_prf_nr_func)
 
 -- Proof of one-time security
+
+-- Unlike previous proofs, these proofs take an adversary as input.
+-- This means the proof is valid for all adversaries, which is what we want.
 theorem enc_prf_nr_is_ind_nrcpa_one_time
   (adv: AdversaryNRCPA AdvStateType):
     is_ind_nrcpa_one_time enc_prf_nr adv := by
