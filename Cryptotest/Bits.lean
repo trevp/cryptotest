@@ -76,7 +76,13 @@ end PrfNumInputs
 Adversary implicitly provides Bits.any and sees Bits.rand, so we don't
 need to model the adversary or security game. Proofs are handled
 automatically by Lean's simplifier tactic. Try replacing simp with
-simp? to see the definitions used in proof. -/
+simp? to see the definitions used in proof.
+
+Note that we prove a strong notion of indistinguishability
+(indistinguishability of ciphertexts from random bits).  This implies
+"left-or-right" IND-CPA, or encryption of a "real-or-random" message,
+though we don't bother formalizing that.
+-/
 @[simp] def enc_otp         : Bits := xor rand any
 @[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
 
@@ -84,12 +90,15 @@ theorem enc_otp_is_ind        : enc_otp = rand        := by simp
 theorem enc_double_otp_is_ind : enc_double_otp = rand := by simp
 
 -- More complex proofs: CPA security
+
 -- An encryption scheme is a pair (initial state, encryption function).
 -- The encryption function maps an input state to an (output Bits, new state)
 def EncryptionSchemeCPA (EncStateType: Type) : Type :=
   EncStateType × (EncStateType → (Bits × EncStateType))
 
 -- Security definition when attacker queries one message
+-- Again, we're showing indistinguishability from random bits, which implies
+-- indistinguishability of ciphertexts and left-or-right indistinguishability.
 @[simp] def is_ind_one_time (enc_scheme: EncryptionSchemeCPA EncStateType) : Prop :=
   let (initial_state, enc_func) := enc_scheme
   let (ctxt, _state) := enc_func initial_state
