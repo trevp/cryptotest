@@ -221,18 +221,23 @@ def AdversaryNRCPA (AdvStateType: Type) : Type :=
   ∀ (q: Nat), is_ind_nrcpa_q enc_init adv_init q
 
 -- A simple encryption scheme: (n=adv(), prf(k,n) xor msg)
-def enc_prf_nr : EncryptionSchemeNRCPA PrfNumInputs :=
-  (PrfNumInputs.new rand,
-  fun (n: Nat) prf =>
-    let (prf_out, prf_next) := prf.prf (num n)
-    (xor any prf_out, prf_next))
+@[simp] def enc_prf_nr_init := PrfNumInputs.new rand
 
+@[simp] def enc_prf_nr_func (n: Nat) (prf: PrfNumInputs) : Bits × PrfNumInputs :=
+  let (prf_out, prf_next) := prf.prf (num n)
+  (xor any prf_out, prf_next)
+
+@[simp] def enc_prf_nr : EncryptionSchemeNRCPA PrfNumInputs :=
+  (enc_prf_nr_init, enc_prf_nr_func)
+
+-- Proof of one-time security
 theorem enc_prf_nr_is_ind_nrcpa_one_time
   (adv: AdversaryNRCPA AdvStateType):
     is_ind_nrcpa_one_time enc_prf_nr adv := by
   simp [is_ind_nrcpa_one_time, enc_prf_nr]
   split; trivial
 
+-- Main proof of this section.  WORK IN PROGRESS
 theorem enc_prf_nr_is_ind_nrcpa
   (adv: AdversaryNRCPA AdvStateType):
     is_ind_nrcpa enc_prf_nr adv := by
@@ -240,11 +245,12 @@ theorem enc_prf_nr_is_ind_nrcpa
   intro q
   unfold is_ind_nrcpa_q
   split
-  rename_i _ _ _ h
+  rename_i enc_prf_nr enc_prf_init enc_prf_func h
   unfold enc_prf_nr at h
   cases h
   induction q with
   | zero =>
     unfold is_ind_nrcpa_q.loop
     split; simp
-  | succ _ ih => sorry -- TODO
+  | succ qn ih =>
+    sorry -- TODO
