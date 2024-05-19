@@ -221,11 +221,14 @@ def AdversaryNRCPA (AdvStateType: Type) : Type :=
   ∀ (q: Nat), is_ind_nrcpa_q enc_init adv_init q
 
 -- A simple encryption scheme: (n=adv(), prf(k,n) xor msg)
-def enc_prf_nr : EncryptionSchemeNRCPA PrfNumInputs :=
-  (PrfNumInputs.new rand,
-  fun (n: Nat) prf =>
-    let (prf_out, prf_next) := prf.prf (num n)
-    (xor any prf_out, prf_next))
+@[simp] def enc_prf_nr_init := PrfNumInputs.new rand
+
+@[simp] def enc_prf_nr_func (n: Nat) (prf: PrfNumInputs) : Bits × PrfNumInputs :=
+  let (prf_out, prf_next) := prf.prf (num n)
+  (xor any prf_out, prf_next)
+
+@[simp] def enc_prf_nr : EncryptionSchemeNRCPA PrfNumInputs :=
+  (enc_prf_nr_init, enc_prf_nr_func)
 
 theorem enc_prf_nr_is_ind_nrcpa_one_time
   (adv: AdversaryNRCPA AdvStateType):
