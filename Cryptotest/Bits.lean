@@ -80,8 +80,8 @@ simp? to see the definitions used in proof. -/
 @[simp] def enc_otp         : Bits := xor rand any
 @[simp] def enc_double_otp  : Bits := xor rand (xor rand any)
 
-theorem enc_otp_is_ind_rand         : enc_otp = rand        := by simp
-theorem enc_double_otp_is_ind_rand  : enc_double_otp = rand := by simp
+theorem enc_otp_is_ind        : enc_otp = rand        := by simp
+theorem enc_double_otp_is_ind : enc_double_otp = rand := by simp
 
 -- More complex proofs: CPA security
 -- An encryption scheme is a pair (initial state, encryption function).
