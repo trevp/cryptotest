@@ -11,7 +11,7 @@ e.g. a Prf.
 Bits.any could be anything, so is used for adversary-chosen plaintexts, or the output
 of calculations when we can't reason about them more precisely.  Bits.rand or rand_pub
 take priority over Bits.any in expressions, so "xor rand any = rand", because "any" has
-a fixed value before "rand" makes a random choice, so "any" and "rand" can't collide.
+a fixed value before "rand" makes a random choice, so "any" and "rand" won't collide.
 -/
 inductive Bits where
   | any           : Bits     -- any value
@@ -100,9 +100,9 @@ def EncryptionSchemeCPA (EncStateType: Type) : Type :=
 @[simp] def is_ind_cpa_q (enc_scheme: EncryptionSchemeCPA EncStateType) (q: Nat): Prop :=
   let (initial_state, enc_func) := enc_scheme
   let rec loop : Nat → Prop × EncStateType
-    | 0   => (True, initial_state)
-    | n+1 =>
-        let (result, state) := loop n
+    | 0      => (True, initial_state)
+    | nq + 1 =>
+        let (result, state) := loop nq
         let (ctxt, new_state) := enc_func state
         (result ∧ ctxt = rand, new_state)
   (loop q).1
@@ -159,7 +159,7 @@ theorem enc_prf_random_is_ind_cpa :
 
 -- WORK IN PROGRESS:
 /-Another simple encryption scheme: (n, prf(n) xor msg)
-  Adversary allowed to choose nonces n, but can't reuse them ("nonce-respecting")
+  Adversary allowed to choose nonces n, but can't reuse them ("nonce-respecting").
   This follows EasyCrypt's IND-NRCPA$ tutorial:
   https://fdupress.gitlab.io/easycrypt-web/docs/simple-tutorial/security
 -/
@@ -181,7 +181,7 @@ adversary's view of plaintexts and ciphertexts, only their choice of nonces.
 def AdversaryNRCPA (AdvStateType: Type) : Type :=
   AdvStateType × (AdvStateType → (Nat × AdvStateType))
 
--- security definition when attacker queries one message
+-- Security definition when attacker queries one message
 @[simp] def is_ind_nrcpa_one_time
     (enc_scheme: EncryptionSchemeNRCPA EncStateType)
     (adv: AdversaryNRCPA AdvStateType) : Prop :=
@@ -191,24 +191,30 @@ def AdversaryNRCPA (AdvStateType: Type) : Type :=
   let (ctxt, _enc_state) := enc_func n initial_enc_state
   ctxt = rand
 
--- ...when attacker queries q messages
--- we're not tracking bounds, so this definition is only valid for small q
+-- Security definition when attacker queries q messages
 @[simp] def is_ind_nrcpa_q
     (enc_scheme: EncryptionSchemeNRCPA EncStateType)
     (adv: AdversaryNRCPA AdvStateType)
     (q: Nat): Prop :=
   let (initial_enc_state, enc_func) := enc_scheme
   let (initial_adv_state, adv_func) := adv
-  let rec loop : Nat → EncStateType → AdvStateType → Prop
-    | 0, _enc_state, _adv_state => True
-    | q+1, enc_state, adv_state =>
-      let (n, new_adv_state) := adv_func adv_state
-      -- TODO: Enforce nonces are non-repeating
-      let (ctxt, new_enc_state) := enc_func n enc_state
-      ctxt = rand ∧ loop q new_enc_state new_adv_state
-  (loop q initial_enc_state initial_adv_state)
+  let rec loop : Nat → Prop × EncStateType × AdvStateType × Finset Nat × Bool
+    | 0       =>    (True, initial_enc_state, initial_adv_state, {}, false)
+    | nq + 1  =>
+      let (result, enc_state, adv_state, used_nums, bad_adv) := loop nq
+      if bad_adv then
+        (True, enc_state, adv_state, used_nums, bad_adv)
+      else
+        let (n, new_adv_state) := adv_func adv_state
+        if n ∈ used_nums then  -- bad adversary reuses nonce, thus loses game
+          (True, enc_state, adv_state, used_nums, true)
+        else
+          let new_used_nums := used_nums ∪ {n}
+          let (ctxt, new_enc_state) := enc_func n enc_state
+          (result ∧ ctxt = rand, new_enc_state, new_adv_state, new_used_nums, false)
+  (loop q).1
 
--- ...when attacker queries any number of messages (caveat above)
+-- ...when attacker queries any number of messages
 @[simp] def is_ind_nrcpa
     (enc_init: EncryptionSchemeNRCPA EncStateType)
     (adv_init: AdversaryNRCPA AdvStateType): Prop :=
@@ -224,7 +230,7 @@ def enc_prf_nr : EncryptionSchemeNRCPA PrfNumInputs :=
 theorem enc_prf_nr_is_ind_nrcpa_one_time
   (adv: AdversaryNRCPA AdvStateType):
     is_ind_nrcpa_one_time enc_prf_nr adv := by
-  simp_all [is_ind_nrcpa_one_time, enc_prf_nr]
+  simp [is_ind_nrcpa_one_time, enc_prf_nr]
   split; trivial
 
 theorem enc_prf_nr_is_ind_nrcpa
@@ -233,8 +239,12 @@ theorem enc_prf_nr_is_ind_nrcpa
   unfold is_ind_nrcpa
   intro q
   unfold is_ind_nrcpa_q
+  split
+  rename_i _ _ _ h
+  unfold enc_prf_nr at h
+  cases h
   induction q with
   | zero =>
-    simp_all [is_ind_nrcpa_q.loop, enc_prf_nr]
-    split; trivial
-  | succ => sorry -- TODO!!!
+    unfold is_ind_nrcpa_q.loop
+    split; simp
+  | succ _ ih => sorry -- TODO
