@@ -68,10 +68,9 @@ structure EncryptionScheme (EncStateType: Type) where
 @[simp] def is_cpa (scheme: EncryptionScheme EncStateType) : Prop :=
   ∃ (sec_invariant: EncStateType → Prop),
       (sec_invariant scheme.initial_state) ∧
-      ∀ (s: EncStateType),
-        sec_invariant s →
-          (scheme.enc_func s).1 = rand ∧
-          sec_invariant (scheme.enc_func s).2
+      ∀ (s: EncStateType), sec_invariant s →
+        (scheme.enc_func s).1 = rand ∧
+        sec_invariant (scheme.enc_func s).2
 
 -- The simple encryption scheme: r=rand, prf(k,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
@@ -86,9 +85,7 @@ theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
 
 -- CPA security of nonce-based PRF encryption scheme
 -- Adversary allowed to choose nonces n, but can't reuse them.
--- Similar to Easycrypt example:
---   https://fdupress.gitlab.io/easycrypt-web/
---   https://gitlab.com/fdupress/easycrypt-tutorial
+-- Similar to Easycrypt: https://fdupress.gitlab.io/easycrypt-web/
 --------------------------------------------------------------
 structure EncryptionSchemeWithNonce (EncStateType: Type) where
   initial_state : EncStateType
