@@ -156,7 +156,7 @@ inductive GroupElement where
 @[simp] instance : Add GroupElement where
   add := group_element_add -- overload "+" operator
 
-@[simp] def hash_to_bits: GroupElement → Bits
+@[simp] def hash_to_bits: GroupElement → Bits -- treat as a random oracle
   | GroupElement.rand | GroupElement.entropy => Bits.rand
   | _ => Bits.any
 
@@ -185,6 +185,7 @@ theorem is_one_time_ind_hashed_elgamal_ddh : hashed_elgamal_ddh = Bits.rand := b
 theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := by rfl
 
 -- Hybrid encryption - Use DH to key an encryption scheme
+---------------------------------------------------------
 @[simp] def hybrid_dh_encryption_cdh (scheme: EncryptionScheme EncState) : Bits :=
   let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
   (scheme.enc_func (scheme.new_func (hash_to_bits shared_secret))).1
