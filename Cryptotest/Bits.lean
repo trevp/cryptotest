@@ -64,22 +64,20 @@ theorem is_ind_enc_double_otp : enc_double_otp = Bits.rand := by rfl
 -- CPA security of simple PRF encryption scheme
 -----------------------------------------------
 structure EncryptionScheme (EncState: Type) where
-  new_func : Bits → EncState              -- initialize with a key
-  enc_func : EncState → (Bits × EncState) -- encrypt Bits.any
+  new : Bits → EncState              -- initialize with a key
+  enc : EncState → (Bits × EncState) -- encrypt Bits.any, update state
 
 -- Security definition
 @[simp] def is_cpa (scheme: EncryptionScheme EncState) : Prop :=
-  ∃ (sec_invariant: EncState → Prop),
-      (sec_invariant (scheme.new_func Bits.rand)) ∧
-      ∀ (s: EncState), sec_invariant s →
-        (scheme.enc_func s).1 = Bits.rand ∧
-        sec_invariant (scheme.enc_func s).2
+  ∃ (invariant: EncState → Prop), invariant (scheme.new Bits.rand) ∧
+    ∀ (s: EncState), invariant s →
+      (scheme.enc s).1 = Bits.rand ∧ invariant (scheme.enc s).2
 
 -- The simple encryption scheme: r=rand, prf(k,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
-  {new_func := fun bits => PrfRandInputs.new bits,
-   enc_func := fun prf => let (prf_out, prf_next) := prf.eval Bits.rand_pub
-                          (prf_out + Bits.any, prf_next)}
+  {new := fun key =>  PrfRandInputs.new key,
+   enc := fun prf =>  let (prf_output, updated_prf) := prf.eval Bits.rand_pub;
+                      (prf_output + Bits.any, updated_prf)}
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
@@ -93,8 +91,8 @@ theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
 -- Similar to Easycrypt: https://fdupress.gitlab.io/easycrypt-web/
 --------------------------------------------------------------
 structure EncryptionSchemeWithNonce (EncState: Type) where
-  new_func : Bits → EncState                    -- initialize with a key
-  enc_func : EncState → Nat → (Bits × EncState) -- encrypt Bits.any with nonce
+  new : Bits → EncState                    -- initialize with a key
+  enc : EncState → Nat → (Bits × EncState) -- encrypt Bits.any with nonce, update state
 
 variable (scheme: EncryptionSchemeWithNonce EncState)
 
@@ -104,34 +102,32 @@ structure NRGameState (EncState: Type) where
   used_nums : Finset Nat
 
 -- Initialize the game state
-@[simp] def nr_game_init : NRGameState EncState := ⟨scheme.new_func Bits.rand, {}⟩
+@[simp] def nr_game_init : NRGameState EncState := ⟨scheme.new Bits.rand, {}⟩
 
 -- The adversary calls this oracle with nonce n
 @[simp] def nr_game_oracle (gs: NRGameState EncState) (n : Nat) :
     Bits × (NRGameState EncState) :=
   if n ∈ gs.used_nums then (Bits.rand, gs) -- adversary tried to cheat
   else
-    let (enc_out, s) := scheme.enc_func gs.enc_state n
+    let (enc_out, s) := scheme.enc gs.enc_state n
     (enc_out, {enc_state := s, used_nums := gs.used_nums ∪ {n} })
 
 -- Security definition
 @[simp] def is_nr_cpa : Prop :=
-  ∃ (sec_invariant: NRGameState EncState → Prop),
-      (sec_invariant (nr_game_init scheme)) ∧
-      ∀ (gs: NRGameState EncState), sec_invariant gs →
-        ∀ (n: Nat),
-          (nr_game_oracle scheme gs n).1 = Bits.rand ∧
-          sec_invariant (nr_game_oracle scheme gs n).2
+  ∃ (invariant: NRGameState EncState → Prop), invariant (nr_game_init scheme) ∧
+    ∀ (gs: NRGameState EncState) (n: Nat), invariant gs →
+      let (ciphertext, next_state) := nr_game_oracle scheme gs n
+      ciphertext = Bits.rand ∧ invariant next_state
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
 @[simp] def enc_prf_nonce : EncryptionSchemeWithNonce PrfNumInputs :=
-  {new_func := fun bits => PrfNumInputs.new bits,
-   enc_func := fun prf n => let (prf_out, prf_next) := prf.eval (Bits.num n)
-                            (prf_out + Bits.any, prf_next)}
+  {new := fun key => PrfNumInputs.new key,
+   enc := fun prf n =>  let (prf_output, updated_prf) := prf.eval (Bits.num n);
+                        (prf_output + Bits.any, updated_prf)}
 
 -- Security proof
 theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
-  -- security invariant: True for all states with a good PRF key and
+  -- invariant: True for all states with a good PRF key and
   -- where the game state used_nums matches the PRF used_nums
   use fun gs =>
     match gs.enc_state with
@@ -173,7 +169,7 @@ inductive GroupElement where
   shared_secret + GroupElement.any
 
 @[simp] def hashed_elgamal_ddh: Bits :=
-  let (_pub_key, _pubephemeral, shared_secret) := ddh_triple
+  let (_pub_key, _pub_ephemeral, shared_secret) := ddh_triple
   (hash_to_bits shared_secret) + Bits.any
 
 @[simp] def hashed_elgamal_cdh: Bits :=
@@ -188,7 +184,7 @@ theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := b
 ---------------------------------------------------------
 @[simp] def hybrid_dh_encryption_cdh (scheme: EncryptionScheme EncState) : Bits :=
   let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
-  (scheme.enc_func (scheme.new_func (hash_to_bits shared_secret))).1
+  (scheme.enc (scheme.new (hash_to_bits shared_secret))).1
 
 theorem is_one_time_ind_hybrid_dh_encryption_cdh
   (scheme: EncryptionScheme EncState) (h_scheme: is_cpa scheme) :
