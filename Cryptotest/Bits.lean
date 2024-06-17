@@ -77,9 +77,9 @@ structure EncryptionScheme (EncState: Type) where
 -- The simple encryption scheme: r=rand_pub, prf(key,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
   {new := fun key =>  PrfRandInputs.new key,
-   enc := fun prf =>  let r := Bits.rand_pub;
+   enc := fun prf =>  let r := Bits.rand_pub
                       let msg := Bits.any
-                      let (prf_output, updated_prf) := prf.eval r;
+                      let (prf_output, updated_prf) := prf.eval r
                       (prf_output + msg, updated_prf)}
 
 -- Security proof
@@ -110,7 +110,8 @@ structure NRGameState (EncState: Type) where
 
 -- The adversary calls this oracle with nonce n
 @[simp] def nr_game_oracle (scheme: EncryptionSchemeWithNonce EncState)
-  (gs: NRGameState EncState) (n : Nat) :
+  (gs: NRGameState EncState)
+  (n : Nat) :
     Bits × (NRGameState EncState) :=
   if n ∈ gs.used_nums then (Bits.rand, gs) -- adversary tried to cheat
   else
@@ -121,13 +122,13 @@ structure NRGameState (EncState: Type) where
 @[simp] def is_nr_cpa (scheme: EncryptionSchemeWithNonce EncState) : Prop :=
   ∃ (invariant: NRGameState EncState → Prop), invariant (nr_game_init scheme) ∧
     ∀ (game_state: NRGameState EncState) (n: Nat), invariant game_state →
-      let (ciphertext, updated_game_state) := (nr_game_oracle scheme game_state n);
+      let (ciphertext, updated_game_state) := (nr_game_oracle scheme game_state n)
       ciphertext = Bits.rand ∧ invariant updated_game_state
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
 @[simp] def enc_prf_nonce : EncryptionSchemeWithNonce PrfNumInputs :=
   {new := fun key => PrfNumInputs.new key,
-   enc := fun prf n =>  let (prf_output, updated_prf) := prf.eval (Bits.num n);
+   enc := fun prf n =>  let (prf_output, updated_prf) := prf.eval (Bits.num n)
                         (prf_output + Bits.any, updated_prf)}
 
 -- Security proof
@@ -191,5 +192,5 @@ theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := b
   ciphertext
 
 theorem is_one_time_ind_hybrid_dh_encryption_cdh
-  (scheme: EncryptionScheme EncState) (h_scheme: is_cpa scheme) :
-    hybrid_dh_encryption_cdh scheme = Bits.rand := by aesop
+  (enc_scheme: EncryptionScheme EncState) (h: is_cpa enc_scheme) :
+    hybrid_dh_encryption_cdh enc_scheme = Bits.rand := by aesop
