@@ -70,8 +70,9 @@ structure EncryptionScheme (EncState: Type) where
 -- Security definition
 @[simp] def is_cpa (scheme: EncryptionScheme EncState) : Prop :=
   ∃ (invariant: EncState → Prop), invariant (scheme.new Bits.rand) ∧
-    ∀ (s: EncState), invariant s →
-      (scheme.enc s).1 = Bits.rand ∧ invariant (scheme.enc s).2
+    ∀ (enc_state: EncState), invariant enc_state →
+      let (ciphertext, updated_enc_state) := scheme.enc enc_state
+      ciphertext = Bits.rand ∧ invariant updated_enc_state
 
 -- The simple encryption scheme: r=rand, prf(k,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
@@ -81,9 +82,10 @@ structure EncryptionScheme (EncState: Type) where
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
-  use fun s => match s with -- security invariant
-    | PrfRandInputs.good_key => True
-    | PrfRandInputs.bad_key => False
+  use fun enc_state =>    -- security invariant
+    match enc_state with
+      | PrfRandInputs.good_key => True
+      | PrfRandInputs.bad_key => False
   aesop
 
 -- CPA security of nonce-based PRF encryption scheme
@@ -115,9 +117,9 @@ structure NRGameState (EncState: Type) where
 -- Security definition
 @[simp] def is_nr_cpa : Prop :=
   ∃ (invariant: NRGameState EncState → Prop), invariant (nr_game_init scheme) ∧
-    ∀ (gs: NRGameState EncState) (n: Nat), invariant gs →
-      let (ciphertext, next_state) := nr_game_oracle scheme gs n
-      ciphertext = Bits.rand ∧ invariant next_state
+    ∀ (game_state: NRGameState EncState) (n: Nat), invariant game_state →
+      let (ciphertext, updated_game_state) := nr_game_oracle scheme game_state n
+      ciphertext = Bits.rand ∧ invariant updated_game_state
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
 @[simp] def enc_prf_nonce : EncryptionSchemeWithNonce PrfNumInputs :=
@@ -127,11 +129,9 @@ structure NRGameState (EncState: Type) where
 
 -- Security proof
 theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
-  -- invariant: True for all states with a good PRF key and
-  -- where the game state used_nums matches the PRF used_nums
-  use fun gs =>
-    match gs.enc_state with
-    | PrfNumInputs.good_key used_nums => gs.used_nums = used_nums
+  use fun game_state =>
+    match game_state.enc_state with
+    | PrfNumInputs.good_key used_nums => game_state.used_nums = used_nums
     | PrfNumInputs.bad_key => False
   aesop
 
@@ -184,7 +184,8 @@ theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := b
 ---------------------------------------------------------
 @[simp] def hybrid_dh_encryption_cdh (scheme: EncryptionScheme EncState) : Bits :=
   let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
-  (scheme.enc (scheme.new (hash_to_bits shared_secret))).1
+  let (ciphertext, _) := scheme.enc (scheme.new (hash_to_bits shared_secret))
+  ciphertext
 
 theorem is_one_time_ind_hybrid_dh_encryption_cdh
   (scheme: EncryptionScheme EncState) (h_scheme: is_cpa scheme) :
