@@ -10,44 +10,50 @@ inductive Bits where
 
 @[simp] def bits_xor (b1: Bits) (b2: Bits) : Bits :=
   match b1, b2 with
-  | Bits.rand, _ => Bits.rand -- XOR of random with anything is random
+  | Bits.rand, _ => Bits.rand -- XOR of anything with random is random
   | _, Bits.rand => Bits.rand
   | _, _      => Bits.any  -- Otherwise "any"
 
 @[simp] instance : Add Bits where add := bits_xor -- overload "+" operator
 
--- This PRF will always return rand if evaluated on rand or rand_pub inputs.
-structure PrfRandInputs
+-- PRF for rand and rand_pub inputs
+inductive PrfRandInputs where
+  | good_key: PrfRandInputs
+  | bad_key: PrfRandInputs
 
 namespace PrfRandInputs
 
-@[simp] def new : Bits → PrfRandInputs × Bool
-  | Bits.rand => ({}, true)
-  | _ => ({}, false)
+@[simp] def new : Bits → PrfRandInputs
+  | Bits.rand => PrfRandInputs.good_key
+  | _ => PrfRandInputs.bad_key
 
-@[simp] def eval (prf: PrfRandInputs) : Bits →  Bits × PrfRandInputs
-  | Bits.rand | Bits.rand_pub => (Bits.rand, prf)
-  | _ => (Bits.any, prf)
+@[simp] def eval (prf: PrfRandInputs) (b: Bits) : Bits × PrfRandInputs :=
+  match prf, b with
+  | PrfRandInputs.good_key, Bits.rand |
+    PrfRandInputs.good_key, Bits.rand_pub => (Bits.rand, prf)
+  | _, _ => (Bits.any, prf)
 
 end PrfRandInputs
 
--- This PRF will always return rand if evaluated on nonrepeating numbered inputs.
-structure PrfNumInputs where
-  used_nums : Finset Nat
+-- PRF for num inputs
+inductive PrfNumInputs where
+  | good_key (used_nums: Finset Nat) : PrfNumInputs
+  | bad_key : PrfNumInputs
 
 namespace PrfNumInputs
 
-@[simp] def new : Bits → PrfNumInputs × Bool
-  | Bits.rand => ({used_nums := {}}, true)
-  | _ => ({used_nums := {}}, false)
+@[simp] def new : Bits → PrfNumInputs
+  | Bits.rand => PrfNumInputs.good_key {}
+  | _ => PrfNumInputs.bad_key
 
-@[simp] def eval (prf: PrfNumInputs) : Bits → Bits × PrfNumInputs
-  | Bits.num n =>
-    if n ∉ prf.used_nums then
-      (Bits.rand, {prf with used_nums := prf.used_nums ∪ {n} })
+@[simp] def eval (prf: PrfNumInputs) (b: Bits) : Bits × PrfNumInputs :=
+  match prf, b with
+  | PrfNumInputs.good_key used_nums, Bits.num n =>
+    if n ∉ used_nums then
+      (Bits.rand, PrfNumInputs.good_key (used_nums ∪ {n}))
     else
       (Bits.any, prf)
-  | _ => (Bits.any, prf)
+  | _, _ => (Bits.any, prf)
 
 end PrfNumInputs
 
@@ -62,12 +68,12 @@ theorem is_ind_enc_double_otp : enc_double_otp = Bits.rand := by rfl
 -- CPA security of simple PRF encryption scheme
 -----------------------------------------------
 structure EncryptionScheme (EncState: Type) where
-  initial_func : Bits → EncState          -- initialize with a key
+  new_func : Bits → EncState              -- initialize with a key
   enc_func : EncState → (Bits × EncState) -- encrypt Bits.any
 
 -- Security definition
 @[simp] def is_cpa (scheme: EncryptionScheme EncState) : Prop :=
-  let initial_state := scheme.initial_func Bits.rand
+  let initial_state := scheme.new_func Bits.rand
   ∃ (sec_invariant: EncState → Prop),
       (sec_invariant initial_state) ∧
       ∀ (s: EncState), sec_invariant s →
@@ -76,13 +82,16 @@ structure EncryptionScheme (EncState: Type) where
 
 -- The simple encryption scheme: r=rand, prf(k,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
-  {initial_func := fun bits => (PrfRandInputs.new bits).1,
+  {new_func := fun bits => PrfRandInputs.new bits,
    enc_func := fun prf => let (prf_out, prf_next) := prf.eval Bits.rand_pub
                           (prf_out + Bits.any, prf_next)}
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
-  use fun _ => True  -- security invariant (True for all inputs)
+  -- security invariant: True for all states with a good PRF key
+  use fun s => match s with
+    | PrfRandInputs.good_key => True
+    | PrfRandInputs.bad_key => False
   aesop
 
 -- CPA security of nonce-based PRF encryption scheme
@@ -90,7 +99,7 @@ theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
 -- Similar to Easycrypt: https://fdupress.gitlab.io/easycrypt-web/
 --------------------------------------------------------------
 structure EncryptionSchemeWithNonce (EncState: Type) where
-  initial_func : Bits → EncState                -- initialize with a key
+  new_func : Bits → EncState                    -- initialize with a key
   enc_func : EncState → Nat → (Bits × EncState) -- encrypt Bits.any with nonce
 
 variable (scheme: EncryptionSchemeWithNonce EncState)
@@ -102,7 +111,7 @@ structure NRGameState (EncState: Type) where
 
 -- Initialize the game state
 @[simp] def nr_game_init : NRGameState EncState :=
-  ⟨scheme.initial_func Bits.rand, {}⟩
+  ⟨scheme.new_func Bits.rand, {}⟩
 
 -- The adversary calls this oracle with nonce n
 @[simp] def nr_game_oracle (gs: NRGameState EncState) (n : Nat) :
@@ -123,17 +132,22 @@ structure NRGameState (EncState: Type) where
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
 @[simp] def enc_prf_nonce : EncryptionSchemeWithNonce PrfNumInputs :=
-  {initial_func := fun bits => (PrfNumInputs.new bits).1,
+  {new_func := fun bits => PrfNumInputs.new bits,
    enc_func := fun prf n => let (prf_out, prf_next) := prf.eval (Bits.num n)
                             (prf_out + Bits.any, prf_next)}
 
 -- Security proof
 theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
-  use fun gs => gs.used_nums = gs.enc_state.used_nums -- security invariant
+  -- security invariant: True for all states with a good PRF key and
+  -- where the game state used_nums matches the PRF used_nums
+  use fun gs =>
+    match gs.enc_state with
+    | PrfNumInputs.good_key used_nums => gs.used_nums = used_nums
+    | PrfNumInputs.bad_key => False
   aesop
 
--- Now moving to public-key crypto and DH
------------------------------------------
+-- Public-key crypto and DH
+---------------------------
 inductive GroupElement where
   | any           : GroupElement     -- any value
   | rand          : GroupElement     -- indistinguishable from random
