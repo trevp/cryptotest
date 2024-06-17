@@ -12,12 +12,11 @@ inductive Bits where
   match b1, b2 with
   | Bits.rand, _ => Bits.rand -- XOR of anything with random is random
   | _, Bits.rand => Bits.rand
-  | _, _      => Bits.any  -- Otherwise "any"
+  | _, _      => Bits.any     -- Otherwise "any"
 
 @[simp] instance : Add Bits where add := bits_xor -- overload "+" operator
 
--- PRF for rand and rand_pub inputs
-inductive PrfRandInputs where
+inductive PrfRandInputs where -- PRF for rand and rand_pub inputs
   | good_key: PrfRandInputs
   | bad_key: PrfRandInputs
 
@@ -35,8 +34,7 @@ namespace PrfRandInputs
 
 end PrfRandInputs
 
--- PRF for num inputs
-inductive PrfNumInputs where
+inductive PrfNumInputs where -- PRF for num inputs
   | good_key (used_nums: Finset Nat) : PrfNumInputs
   | bad_key : PrfNumInputs
 
@@ -49,10 +47,8 @@ namespace PrfNumInputs
 @[simp] def eval (prf: PrfNumInputs) (b: Bits) : Bits × PrfNumInputs :=
   match prf, b with
   | PrfNumInputs.good_key used_nums, Bits.num n =>
-    if n ∉ used_nums then
-      (Bits.rand, PrfNumInputs.good_key (used_nums ∪ {n}))
-    else
-      (Bits.any, prf)
+    if n ∉ used_nums then (Bits.rand, PrfNumInputs.good_key (used_nums ∪ {n}))
+    else (Bits.any, prf)
   | _, _ => (Bits.any, prf)
 
 end PrfNumInputs
@@ -73,9 +69,8 @@ structure EncryptionScheme (EncState: Type) where
 
 -- Security definition
 @[simp] def is_cpa (scheme: EncryptionScheme EncState) : Prop :=
-  let initial_state := scheme.new_func Bits.rand
   ∃ (sec_invariant: EncState → Prop),
-      (sec_invariant initial_state) ∧
+      (sec_invariant (scheme.new_func Bits.rand)) ∧
       ∀ (s: EncState), sec_invariant s →
         (scheme.enc_func s).1 = Bits.rand ∧
         sec_invariant (scheme.enc_func s).2
@@ -88,8 +83,7 @@ structure EncryptionScheme (EncState: Type) where
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
-  -- security invariant: True for all states with a good PRF key
-  use fun s => match s with
+  use fun s => match s with -- security invariant
     | PrfRandInputs.good_key => True
     | PrfRandInputs.bad_key => False
   aesop
@@ -110,8 +104,7 @@ structure NRGameState (EncState: Type) where
   used_nums : Finset Nat
 
 -- Initialize the game state
-@[simp] def nr_game_init : NRGameState EncState :=
-  ⟨scheme.new_func Bits.rand, {}⟩
+@[simp] def nr_game_init : NRGameState EncState := ⟨scheme.new_func Bits.rand, {}⟩
 
 -- The adversary calls this oracle with nonce n
 @[simp] def nr_game_oracle (gs: NRGameState EncState) (n : Nat) :
@@ -153,7 +146,6 @@ inductive GroupElement where
   | rand          : GroupElement     -- indistinguishable from random
   | rand_pub      : GroupElement     -- indistinguishable from random but public (e.g. nonce)
   | entropy       : GroupElement     -- high entropy but not necessarily uniform
-  | num (n: Nat)  : GroupElement     -- scalar n encoded into group element via G^n
 
 @[simp] def group_element_add (e1: GroupElement) (e2: GroupElement) :=
   match e1, e2 with
@@ -191,3 +183,12 @@ inductive GroupElement where
 theorem is_one_time_ind_elgamal_ddh : elgamal_ddh = GroupElement.rand := by rfl
 theorem is_one_time_ind_hashed_elgamal_ddh : hashed_elgamal_ddh = Bits.rand := by rfl
 theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := by rfl
+
+-- Hybrid encryption - Use DH to key an encryption scheme
+@[simp] def hybrid_dh_encryption_cdh (scheme: EncryptionScheme EncState) : Bits :=
+  let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
+  (scheme.enc_func (scheme.new_func (hash_to_bits shared_secret))).1
+
+theorem is_one_time_ind_hybrid_dh_encryption_cdh
+  (scheme: EncryptionScheme EncState) (h_scheme: is_cpa scheme) :
+    hybrid_dh_encryption_cdh scheme = Bits.rand := by aesop
