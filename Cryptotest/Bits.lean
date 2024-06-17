@@ -74,11 +74,13 @@ structure EncryptionScheme (EncState: Type) where
       let (ciphertext, updated_enc_state) := scheme.enc enc_state
       ciphertext = Bits.rand ∧ invariant updated_enc_state
 
--- The simple encryption scheme: r=rand, prf(k,r) xor msg
+-- The simple encryption scheme: r=rand_pub, prf(key,r) xor msg
 @[simp] def enc_prf_random : EncryptionScheme PrfRandInputs :=
   {new := fun key =>  PrfRandInputs.new key,
-   enc := fun prf =>  let (prf_output, updated_prf) := prf.eval Bits.rand_pub;
-                      (prf_output + Bits.any, updated_prf)}
+   enc := fun prf =>  let r := Bits.rand_pub;
+                      let msg := Bits.any
+                      let (prf_output, updated_prf) := prf.eval r;
+                      (prf_output + msg, updated_prf)}
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
