@@ -82,7 +82,7 @@ structure EncryptionScheme (EncState: Type) where
 
 -- Security proof
 theorem is_cpa_enc_prf_random: is_cpa enc_prf_random := by
-  use fun enc_state =>    -- security invariant
+  use fun enc_state =>    -- invariant
     match enc_state with
       | PrfRandInputs.good_key => True
       | PrfRandInputs.bad_key => False
@@ -96,29 +96,30 @@ structure EncryptionSchemeWithNonce (EncState: Type) where
   new : Bits → EncState                    -- initialize with a key
   enc : EncState → Nat → (Bits × EncState) -- encrypt Bits.any with nonce, update state
 
-variable (scheme: EncryptionSchemeWithNonce EncState)
-
 -- The adversary interacts with a stateful game:
 structure NRGameState (EncState: Type) where
   enc_state : EncState
   used_nums : Finset Nat
 
 -- Initialize the game state
-@[simp] def nr_game_init : NRGameState EncState := ⟨scheme.new Bits.rand, {}⟩
+@[simp] def nr_game_init (scheme: EncryptionSchemeWithNonce EncState) :
+    NRGameState EncState :=
+  ⟨scheme.new Bits.rand, {}⟩
 
 -- The adversary calls this oracle with nonce n
-@[simp] def nr_game_oracle (gs: NRGameState EncState) (n : Nat) :
+@[simp] def nr_game_oracle (scheme: EncryptionSchemeWithNonce EncState)
+  (gs: NRGameState EncState) (n : Nat) :
     Bits × (NRGameState EncState) :=
   if n ∈ gs.used_nums then (Bits.rand, gs) -- adversary tried to cheat
   else
-    let (enc_out, s) := scheme.enc gs.enc_state n
-    (enc_out, {enc_state := s, used_nums := gs.used_nums ∪ {n} })
+    let (ciphertext, updated_enc_state) := scheme.enc gs.enc_state n
+    (ciphertext, {enc_state := updated_enc_state, used_nums := gs.used_nums ∪ {n} })
 
 -- Security definition
-@[simp] def is_nr_cpa : Prop :=
+@[simp] def is_nr_cpa (scheme: EncryptionSchemeWithNonce EncState) : Prop :=
   ∃ (invariant: NRGameState EncState → Prop), invariant (nr_game_init scheme) ∧
     ∀ (game_state: NRGameState EncState) (n: Nat), invariant game_state →
-      let (ciphertext, updated_game_state) := nr_game_oracle scheme game_state n
+      let (ciphertext, updated_game_state) := (nr_game_oracle scheme game_state n);
       ciphertext = Bits.rand ∧ invariant updated_game_state
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
@@ -129,7 +130,7 @@ structure NRGameState (EncState: Type) where
 
 -- Security proof
 theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
-  use fun game_state =>
+  use fun game_state => -- invariant
     match game_state.enc_state with
     | PrfNumInputs.good_key used_nums => game_state.used_nums = used_nums
     | PrfNumInputs.bad_key => False
