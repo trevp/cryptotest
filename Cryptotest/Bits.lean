@@ -10,9 +10,9 @@ inductive Bits where
 
 @[simp] def bits_xor (b1: Bits) (b2: Bits) : Bits :=
   match b1, b2 with
-  | Bits.rand, _ => Bits.rand -- XOR of anything with random is random
-  | _, Bits.rand => Bits.rand
-  | _, _      => Bits.any     -- Otherwise "any"
+  | Bits.rand, _  => Bits.rand  -- XOR of anything with random is random
+  | _, Bits.rand  => Bits.rand
+  | _, _          => Bits.any   -- Otherwise "any"
 
 @[simp] instance : Add Bits where add := bits_xor -- overload "+" operator
 
@@ -145,7 +145,6 @@ inductive GroupElement where
   | any           : GroupElement     -- any value
   | rand          : GroupElement     -- indistinguishable from random
   | rand_pub      : GroupElement     -- indistinguishable from random but public (e.g. nonce)
-  | entropy       : GroupElement     -- high entropy but not necessarily uniform
 
 @[simp] def group_element_add (e1: GroupElement) (e2: GroupElement) :=
   match e1, e2 with
@@ -157,40 +156,34 @@ inductive GroupElement where
   add := group_element_add -- overload "+" operator
 
 @[simp] def hash_to_bits: GroupElement → Bits -- treat as a random oracle
-  | GroupElement.rand | GroupElement.entropy => Bits.rand
+  | GroupElement.rand => Bits.rand
   | _ => Bits.any
 
 @[simp] def ddh_triple: (GroupElement × GroupElement × GroupElement) :=
   (GroupElement.rand_pub, GroupElement.rand_pub, GroupElement.rand)
 
-@[simp] def cdh_triple: (GroupElement × GroupElement × GroupElement) :=
-  (GroupElement.rand_pub, GroupElement.rand_pub, GroupElement.entropy)
-
 -- Simple proofs: ElGamal and Hashed ElGamal Encryption
 --------------------------------------------------------
 @[simp] def elgamal_ddh: GroupElement :=
   let (_pub_key, _pub_ephemeral, shared_secret) := ddh_triple
-  shared_secret + GroupElement.any
+  let msg := GroupElement.any
+  shared_secret + msg
 
 @[simp] def hashed_elgamal_ddh: Bits :=
   let (_pub_key, _pub_ephemeral, shared_secret) := ddh_triple
-  (hash_to_bits shared_secret) + Bits.any
-
-@[simp] def hashed_elgamal_cdh: Bits :=
-  let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
-  (hash_to_bits shared_secret) + Bits.any
+  let msg := Bits.any
+  (hash_to_bits shared_secret) + msg
 
 theorem is_one_time_ind_elgamal_ddh : elgamal_ddh = GroupElement.rand := by rfl
 theorem is_one_time_ind_hashed_elgamal_ddh : hashed_elgamal_ddh = Bits.rand := by rfl
-theorem is_one_time_ind_hashed_elgamal_cdh : hashed_elgamal_cdh = Bits.rand := by rfl
 
 -- Hybrid encryption - Use DH to key an encryption scheme
 ---------------------------------------------------------
-@[simp] def hybrid_dh_encryption_cdh (scheme: EncryptionScheme EncState) : Bits :=
-  let (_pub_key, _pub_ephemeral, shared_secret) := cdh_triple
+@[simp] def hybrid_dh_encryption_ddh (scheme: EncryptionScheme EncState) : Bits :=
+  let (_pub_key, _pub_ephemeral, shared_secret) := ddh_triple
   let (ciphertext, _) := scheme.enc (scheme.new (hash_to_bits shared_secret))
   ciphertext
 
-theorem is_one_time_ind_hybrid_dh_encryption_cdh
+theorem is_one_time_ind_hybrid_dh_encryption_ddh
   (enc_scheme: EncryptionScheme EncState) (h: is_cpa enc_scheme) :
-    hybrid_dh_encryption_cdh enc_scheme = Bits.rand := by aesop
+    hybrid_dh_encryption_ddh enc_scheme = Bits.rand := by aesop
