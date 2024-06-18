@@ -2,6 +2,13 @@ import Mathlib
 open Finset
 
 -- Bits is a fixed-length sequence of bits of cryptographic length, e.g. 128 or 256 bits.
+--
+-- Every occurrence of Bits.rand in an expression represents sampling a fresh random value
+-- which is (at least computationally) indistinguishable from random, and which is unknown
+-- to an attacker unless explicitly provided to them.
+-- Thus Bits.rand will not equal other Bits values (including another Bits.rand) except
+-- with negligible probability.  In contrast, the values (any, rand_pub, num) might all be
+-- aliases for the same bit string.
 inductive Bits where
   | any           : Bits     -- any value
   | rand          : Bits     -- indistinguishable from random
