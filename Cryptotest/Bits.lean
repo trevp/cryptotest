@@ -7,8 +7,8 @@ open Finset
 -- which is (at least computationally) indistinguishable from random, and which is unknown
 -- to an attacker unless explicitly provided to them.
 -- Thus Bits.rand will not equal other Bits values (including another Bits.rand) except
--- with negligible probability.  In contrast, the values (any, rand_pub, num) might all be
--- aliases for the same bit string.
+-- with negligible probability, which we ignore.  In contrast, the terms (any, rand_pub, num)
+-- might all be aliases for the same value.
 inductive Bits where
   | any           : Bits     -- any value
   | rand          : Bits     -- indistinguishable from random
@@ -134,9 +134,9 @@ structure NRGameState (EncState: Type) where
 
 -- The simple encryption scheme: n=nonce, prf(k,n) xor msg
 @[simp] def enc_prf_nonce : EncryptionSchemeWithNonce PrfNumInputs :=
-  {new := fun key => PrfNumInputs.new key,
-   enc := fun prf n =>  let (prf_output, updated_prf) := prf.eval (Bits.num n)
-                        (prf_output + Bits.any, updated_prf)}
+  {new := fun key   => PrfNumInputs.new key,
+   enc := fun prf n => let (prf_output, updated_prf) := prf.eval (Bits.num n)
+                       (prf_output + Bits.any, updated_prf)}
 
 -- Security proof
 theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
@@ -151,7 +151,7 @@ theorem is_nr_cpa_enc_prf_nonce: is_nr_cpa enc_prf_nonce := by
 inductive GroupElement where
   | any           : GroupElement     -- any value
   | rand          : GroupElement     -- indistinguishable from random
-  | rand_pub      : GroupElement     -- indistinguishable from random but public (e.g. nonce)
+  | rand_pub      : GroupElement     -- indistinguishable from random but public (e.g. public key)
 
 @[simp] def group_element_add (e1: GroupElement) (e2: GroupElement) :=
   match e1, e2 with
