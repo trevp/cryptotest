@@ -47,7 +47,6 @@ theorem ror_implies_lr_proof_2 (s: SymEnc KeyType MessageType CipherTextType) :
   rw [hl]
   rw [hr]
 
--- rewriting above in "calc" style, not that interesting...
 theorem ror_implies_lr_proof_3 (s: SymEnc KeyType MessageType CipherTextType) :
     is_ror_ind s → is_lr_ind s := by
   intro h
@@ -56,7 +55,5 @@ theorem ror_implies_lr_proof_3 (s: SymEnc KeyType MessageType CipherTextType) :
   unfold is_ror_ind at h
   unfold oracle_real oracle_random at h
   intro k ml mr
-  -- prove goal: ∀ k ml mlr, s.enc k ml = s.enc k mr
-  -- using h:    ∀ k m, s.enc k m = s.random ()
   calc s.enc k ml = s.random () := by rw [(h k ml)]
-                _ = s.enc k mr  := by rw [←(h k mr)]
+                _ = s.enc k mr  := by rw [(h k mr)]
