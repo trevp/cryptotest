@@ -55,5 +55,5 @@ theorem ror_implies_lr_proof_3 (s: SymEnc KeyType MessageType CipherTextType) :
   unfold is_ror_ind at h
   unfold oracle_real oracle_random at h
   intro k ml mr
-  calc s.enc k ml = s.random () := by rw [(h k ml)]
-                _ = s.enc k mr  := by rw [(h k mr)]
+  calc s.enc k ml = s.random () := by rw [h k ml]
+                _ = s.enc k mr  := by rw [h k mr]
